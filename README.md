@@ -8,3 +8,6 @@ wedi -m [FOLDER]        -open most edited file <br>
 wedi FILE               -open file to edit <br>
 wedi -l [FOLDER]          -print list of edited files in directory or PWD <br>
 wedi -b|-a DATE [FOLDER]  -print list of edited files by date before/after in YYYY-MM-DD format <br>
+
+
+http://www.fit.vutbr.cz/study/courses/IOS/public/Lab/projekty/projekt1/projekt1.html
