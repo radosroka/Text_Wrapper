@@ -1,0 +1,224 @@
+
+
+# Author: Radovan Sroka 1BIB
+# Login: xsroka00
+# Date: 29.03.2015
+# Script wedi - Wrapper
+
+
+
+abs () {
+	
+	if [ -d "$1" ]; then
+		normalDir="`cd "$1";pwd`"
+		echo "$normalDir"
+	elif [ -f "$1" ]; then
+		DNAME=`dirname $1`
+		normalDir="`cd "$DNAME";pwd`"
+		echo "$normalDir/`basename "$1"`"
+	fi
+}
+
+command -v realpath > /dev/null
+
+if [ "$?" -eq "0" ]; then
+	real="realpath"
+else
+	real="abs"
+fi
+
+
+old=$IFS
+IFS=$(echo -en "\n\b")
+
+Edit () {
+	echo "`date +%Y%m%d`:$1" >> $WD_FILE
+	exec "$MY_EDITOR" "$1"
+	STATUS=$?
+	if ! [ $STATUS ]; then
+		echo "Cannot execute \"$MY_EDITOR $1\"" >&2
+		exit $STATUS
+	fi
+}
+
+LastFromFolder () {
+	
+	for f in `sed '1!G;h;$!d' $2 | grep -E "^[0-9]{8}:$1/[^/:][^/:]*$" | cut -d":" -f2`
+	do
+		if ! [ -e "$f" ]; then
+			continue
+		else 
+			Edit "$f"
+			VERIF="OK"
+			break
+		fi
+	done	
+	
+	if ! [ "$VERIF" ]; then
+		echo "There is no latest file" >&2
+		_Exit_1_
+	fi	
+}
+
+TopFromFolder () {
+
+	for f in `grep -E "^[0-9]{8}:$1/[^/:][^/:]*$" $2 | cut -d":" -f2 | awk '{print ":" $0}' | sort | uniq -c | sort -n -r | cut -d":" -f2 `
+	do
+		if ! [ -e "$f" ]; then
+			continue
+		else 
+			Edit "$f"
+			VERIF="OK"
+			break
+		fi
+	done	
+
+	if ! [ "$VERIF" ]; then
+		echo "There is no latest file" >&2
+		_Exit_1_
+	fi	
+}
+
+ListFromFolder () {
+
+	for f in `grep -E "^[0-9]{8}:$1/[^/:][^/:]*$" $2 | cut -d":" -f2 | sort | uniq`
+	do
+		if ! [ -e "$f" ]; then
+			continue
+		else 
+			echo "`basename $f`"
+		fi
+	done	
+}
+
+GetBAFromFolder () {
+	if [ $4 = "-a" ]; then
+		for f in `grep -E "^[0-9]{8}:$1/[^/:][^/:]*$" $2 | sort -k2 -t":"| awk -v date=$3 -F":" '{if($1 >= date)print $2}' | uniq`
+		do
+		if ! [ -e "$f" ]; then
+			continue
+		else 
+			echo "`basename $f`" 
+		fi
+	done
+
+	else
+		for f in `grep -E "^[0-9]{8}:$1/[^/:][^/:]*$" $2 | sort -k2 -t":"| awk -v date="$3" -F":" '{if($1 <= date)print $2}' | uniq`
+		do
+		if ! [ -e "$f" ]; then
+			continue
+		else 
+			echo "`basename $f`" 
+		fi
+	done
+
+	fi
+}
+
+_Exit_1_ () {
+	IFS="$old"
+	exit 1
+}
+
+_Exit_0_ () {
+	IFS="$old"
+	exit 0
+}
+
+if [ -z "$WEDI_RC" ]; then
+	echo "WEDI_RC doesnt exist" >&2
+	_Exit_1_ 
+elif ! [ -r "$WEDI_RC" ] || ! [ -w "$WEDI_RC" ]; then
+	echo "$WEDI_RC is not readable or writeable or doesnt exist" >&2
+	_Exit_1_ 
+else
+	WD_FILE="$WEDI_RC"
+fi
+
+
+if [ "$EDITOR" ]; then
+	MY_EDITOR="$EDITOR"
+elif [ "$VISUAL" ]; then
+	MY_EDITOR="$VISUAL"
+else 
+	echo "Variables EDITOR and VISUAL doesnt exist" >&2
+	_Exit_1_
+fi
+
+if [ "$1" = "-m" ] || [ "$1" = "-l" ] || [ "$1" = "-a" ] || [ "$1" = "-b" ]; then
+
+	if [ "$1" = "-m" ] || [ "$1" = "-l" ]; then
+		DIR="$2" 
+	fi
+
+	if [ "$1" = "-b" ] || [ "$1" = "-a" ]; then
+		DATE="$2"
+		DIR="$3"
+
+		if [ -z "$DATE" ]; then
+			echo "Missing parameter date" >&2
+			_Exit_1_
+		fi
+
+		g=`echo "$DATE" | grep -E "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"`
+
+		if [ -z "$g" ]; then
+			echo "Bad format of Date" >&2
+			_Exit_1_
+		fi
+	fi
+	if [ -z "$DIR" ]; then
+		DIR="`pwd`"
+	fi
+
+	p=$DIR
+	DIR="`$real $p`"
+
+	if [ -d "$DIR" ];	then
+		
+		case "$1" in
+			"-m")
+				TopFromFolder "$DIR" "$WD_FILE"
+				_Exit_0_;;
+			"-l")
+				ListFromFolder "$DIR" "$WD_FILE"
+				_Exit_0_;;
+			"-a"|"-b")
+				d="`echo "$DATE" | awk '{gsub( "[-]","" ); print $0}'`"
+				GetBAFromFolder "$DIR" "$WD_FILE" "$d" "$1"				
+				_Exit_0_;;
+		esac
+	else
+		echo "$DIR is not directory or not exist" >&2
+		_Exit_1_
+	fi
+
+elif [ $# -eq 1 ]; then
+	if [ -d "$1" ]; then
+		DIR=`$real "$1"`
+		LastFromFolder $DIR $WD_FILE
+
+	else 
+		if [ -e "$1" ]; then
+			FILE="`$real "$1"`"
+		else 
+			BASE=`basename "$1"`
+
+			if [ "$BASE" = "$1" ]; then
+				FILE="`$real .`/$1"
+			else 
+				FILE="$1"
+			fi			
+		fi
+		Edit "$FILE"
+	fi
+
+elif [ $# -eq 0 ]; then
+	p="`pwd`"
+	DIR="`$real $p`"
+	LastFromFolder "$DIR" "$WD_FILE"
+
+else 
+	echo "Bad Parameters" 2>&1
+	_Exit_1_
+fi
